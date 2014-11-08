@@ -1,4 +1,5 @@
 ; LCD driver file, re-written in assembly by Chris Miller 11/2/14
+;   edited and tweaked by Tom D'Agostino 11/7/14
 ; *	This code will interface to a wide variety of B/W LCD Display Controllers
 ; *	like the Hitachi HD44780. It uses the 4-bit transfer mode, and it assumes that the
 ; * pins of PORT D (RD7:0) are connected to the LCD panel, with the 
@@ -44,11 +45,13 @@ CHECKJ
     GOTO JLESS
     MOVF LCD_STACK0, W
     SUBWF LCD_STACK2, W
-JLESS       BTFSC STATUS, C
+JLESS
+    BTFSC STATUS, C
     RETURN
 ;       for (i = 0; i < 248; i++);
     CLRF LCD_STACK4
-INCI     MOVLW 0x1
+INCI
+    MOVLW 0x1
     ADDWF LCD_STACK4, F
     NOP
     MOVLW 0xF8
@@ -81,15 +84,18 @@ IEQUAL
 ;
 ;        unsigned char i;
 ;        for (i = 0; i < 10; i++);   // allow ~60us for each write (at Fosc=8MHz)
-LCDWRITE  CLRF LCD_STACK2
-LOOP10    MOVLW 0xA
+LCDWRITE  
+    CLRF LCD_STACK2
+LOOP10
+    MOVLW 0xA
     SUBWF LCD_STACK2, W
     BTFSC STATUS, C
     GOTO DONE10
     INCF LCD_STACK2, F
     GOTO LOOP10
 ;        LCD_DATA = (CmdChar & 0xf0);
-DONE10    MOVF LCD_STACK1, W
+DONE10
+    MOVF LCD_STACK1, W
     ANDLW 0xF0
     BANKSEL PORTD
     MOVWF PORTD
@@ -98,8 +104,10 @@ DONE10    MOVF LCD_STACK1, W
     GOTO MODE0
     BSF PORTD, 0x2
     GOTO HINIBBLE
-MODE0     BCF PORTD, 0x2
-HINIBBLE     NOP
+MODE0
+    BCF PORTD, 0x2
+HINIBBLE
+    NOP
 ;        LCD_STROBE(); // Write 8 bits of data on D7-0
     BSF PORTD, 0x3
     BSF PORTD, 0x3
@@ -109,7 +117,8 @@ HINIBBLE     NOP
     ANDWF LCD_STACK1, F
     BSF LCD_STACK1, 0x4
     BCF STATUS, C
-SHIFTDATA    RLF LCD_STACK1, F
+SHIFTDATA
+    RLF LCD_STACK1, F
     BTFSS STATUS, C
     GOTO SHIFTDATA
     MOVF LCD_STACK1, W
@@ -119,8 +128,10 @@ SHIFTDATA    RLF LCD_STACK1, F
     GOTO MODE0LO
     BSF PORTD, 0x2
     GOTO LONIBBLE
-MODE0LO     BCF PORTD, 0x2
-LONIBBLE    NOP
+MODE0LO
+    BCF PORTD, 0x2
+LONIBBLE
+    NOP
 ;        LCD_STROBE(); // Write 8 bits of data on D7-0
     BSF PORTD, 0x3
     BSF PORTD, 0x3
@@ -137,7 +148,8 @@ LONIBBLE    NOP
 ;   void lcd_clear(void) {
 ;
 ;       lcd_write(CMD_MODE, LCDCMD_ClearDisplay);
-LCDCLEAR     CLRF LCD_STACK1
+LCDCLEAR
+    CLRF LCD_STACK1
     INCF LCD_STACK1, F  ; set CmdChar
     CLRF LCD_STACK0     ; set mode
     PAGESEL LCDWRITE    ; BCF PCLATH, 0x4, BCF PCLATH, 0x3

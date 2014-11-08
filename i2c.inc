@@ -1,6 +1,7 @@
 ;/*
 ; *	I2C functions for HI-TECH PIC C - master mode only
 ;   re-written in assembly by Chris Miller 11/4/14
+;   edited and tweaked by Tom D'Agostino 11/7/14
 ; */
 ;
 
