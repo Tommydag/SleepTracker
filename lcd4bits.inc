@@ -22,10 +22,9 @@ LCD_STACK1    RES        1
 LCD_STACK2    RES        1
 LCD_STACK3    RES        1
 LCD_STACK4    RES        1
-;Capsense Variables
-CAP1            RES       1
-CAP2            RES       1
-CAP3            RES       1
+CAP1          RES        1
+CAP2          RES        1
+CAP3          RES        1
 TEMP          RES        1
 
 LCD4BITS    CODE

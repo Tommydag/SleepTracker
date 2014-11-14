@@ -264,30 +264,33 @@ CAPSENSE
     bcf TRISC,RXPIN
     bsf TRISC,RXPIN
 
+    movlw 0x01
+    movwf CAP1
+
     banksel PORTC
     bsf PORTC,SENDPIN ;SEND it HIGH!
 
-    bsf CAP1,0
+    
 CAPLOOP
     incfsz CAP1,F
     goto CAPCHECK
 
-    clrf CAP1
-    incf CAP2,F
-    btfss STATUS,Z
+    incfsz CAP2,F
     goto CAPCHECK
 
-    clrf CAP2
     incf CAP3,F
-    btfsc STATUS,Z
-    bsf PORTC,1
+    btfsc CAP3,3
+    goto CAPSTEP
+
 
 CAPCHECK
     btfsc PORTC,RXPIN
     goto CAPSTEP
 
     goto CAPLOOP
+
 CAPSTEP
+    bsf PORTC,1
     call ISP_ENABLE
 
     return
