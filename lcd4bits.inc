@@ -22,7 +22,11 @@ LCD_STACK1    RES        1
 LCD_STACK2    RES        1
 LCD_STACK3    RES        1
 LCD_STACK4    RES        1
-
+;Capsense Variables
+CAP1            RES       1
+CAP2            RES       1
+CAP3            RES       1
+TEMP          RES        1
 
 LCD4BITS    CODE
 
@@ -36,6 +40,7 @@ LCD4BITS    CODE
 ;   unsigned int i, j;
 ;   for (j = 0; j < nrms; j++)
 DELAYMS
+    banksel STATUS
     CLRF LCD_STACK2
     CLRF LCD_STACK3
 CHECKJ      
@@ -136,6 +141,7 @@ LONIBBLE
     BSF PORTD, 0x3
     BSF PORTD, 0x3
     BCF PORTD, 0x3
+    pagesel LCD_Init
 ;    }
     RETURN
 

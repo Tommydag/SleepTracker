@@ -75,7 +75,7 @@ INITI2C
     BANKSEL SSPCON2
     CLRF SSPCON2
 ;	SSPADD = 19;        // Choose 100 kHZ I2C clock rate assuming an Fosc = 8 Mhz PIC clock
-    MOVLW 0x13
+    MOVLW 0x14
     MOVWF SSPADD
 ; 	SSPIF=0;      		// Clear SSPIF interrupt flag (PIR1 bit 3)
     BANKSEL PIR1
@@ -106,13 +106,14 @@ INITI2C
 I2CSTOP
 ;	/* don't assume SCL is high on entry */
 ;	SDA_LOW();					/* ensure data is low first */
+    
     BANKSEL TRISC
     BCF TRISC, 4
 ;	SCL_HIGH();
     BSF TRISC, 3
 ;	__delay_us(I2C_TM_DATA_SU);     1us
     NOP
-    NOP
+    
 ;	SCL_DIR = I2C_INPUT;		/* float clock high */
     BSF TRISC, 3
 ;	__delay_us(I2C_TM_STOP_SU);     4us
