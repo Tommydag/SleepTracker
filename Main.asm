@@ -18,7 +18,6 @@
 #include "p16F887.inc"
 #include "lcd4bits.inc"
 
-    ;errorlevel 1
 
 ; CONFIG1
 ; __config 0x20F2
@@ -27,7 +26,6 @@
 ; __config 0x3EFF
  __CONFIG _CONFIG2, _BOR4V_BOR21V & _WRT_OFF
 
-;errorlevel 1
 
     radix dec ; Make default numbers decimal values
     org 0 ; Reset vector is at prog loc 0x00.
@@ -41,14 +39,14 @@ RXPIN       EQU     5
     ; starting at address 0x20 in register file space
     count1 ;count1 => 0x20
     count2 ;count2 => 0x21
-    half_seconds
-    secondsLSB
-    seconds
-    secondsMSB
-
-
-
+    CAP_AVG:12
+    CAP_LOC
     ENDC
+
+    org 0x04
+    goto ISPHANDLER
+
+
 
     org 0x05 ;Start assembling program at location 5 in program space.
 start
@@ -59,7 +57,6 @@ start
     
 INIT
 IO_INIT
-    call CAPSENSE
     pagesel INIT
     ;Port A
     banksel TRISA
@@ -76,9 +73,9 @@ IO_INIT
     MOVLW 0xFF
     MOVWF TRISB
     banksel ANSEL
-    movlw 0x20
-    movwf ANSELH
     clrf ANSEL
+    banksel ANSELH
+    clrf ANSELH
     banksel OPTION_REG
     bcf OPTION_REG,7;set bit 7 to 0
     banksel WPUB
@@ -122,14 +119,53 @@ CAPSENSE_Init
 
     bcf TRISC,SENDPIN ;Set as output
 
+    banksel CAP_LOC
+    clrf CAP_LOC
+
+
     call ISP_ENABLE
     pagesel CAPSENSE_Init
+TIMER_ISP_Init
 
+    banksel TMR1L
+    clrf TMR1L
+    banksel TMR1H
+    clrf TMR1H
+    banksel T1CON
+    movlw 0xB0 ;timer setup but off
+    movwf T1CON
+    banksel INTCON
+    bsf INTCON,PEIE
+    bsf INTCON,GIE
+    banksel PIE1
+    bsf PIE1,TMR1IE
+    banksel TMR1H
+    movlw 0x0B
+    movwf TMR1H
+    banksel TMR1L
+    movlw 0xDC
+    movwf TMR1L
   
-
 INIT_FINISHED
     pagesel loop
     goto loop
+
+ISPHANDLER
+
+    ;ALL in the same bank(How Efficient!), don't rearrange!
+    banksel T1CON
+    bcf T1CON,TMR1ON
+    movlw 0x0B
+    movwf TMR1H
+    movlw 0xDC
+    movwf TMR1L
+    banksel PIR1
+    bcf PIR1, TMR1IF
+    banksel T1CON
+    bsf T1CON,TMR1ON
+
+    retfie
+
 
 ;=======================================================================
 ; End Startup
@@ -248,9 +284,9 @@ ISP_ENABLE
 CAPSENSE
     call ISP_DISABLE
     pagesel CAPSENSE
-    clrf CAP1
-    clrf CAP2
-    clrf CAP3
+    clrf CAP
+    clrf CAP+1
+    clrf CAP+2
 
     banksel PORTC
     bcf PORTC,SENDPIN
@@ -265,21 +301,21 @@ CAPSENSE
     bsf TRISC,RXPIN
 
     movlw 0x01
-    movwf CAP1
+    movwf CAP
 
     banksel PORTC
     bsf PORTC,SENDPIN ;SEND it HIGH!
 
     
 CAPLOOP
-    incfsz CAP1,F
+    incfsz CAP,F
     goto CAPCHECK
 
-    incfsz CAP2,F
+    incfsz CAP+1,F
     goto CAPCHECK
 
-    incf CAP3,F
-    btfsc CAP3,3
+    incf CAP+2,F
+    btfsc CAP+2,3
     goto CAPSTEP
 
 
@@ -290,8 +326,184 @@ CAPCHECK
     goto CAPLOOP
 
 CAPSTEP
+    btfsc CAP+2,3
     bsf PORTC,1
     call ISP_ENABLE
+
+SAMPLEDECIDE
+    banksel CAP_LOC
+
+    btfsc CAP_LOC,1
+    goto THIRDSAMPLE
+
+    btfsc CAP_LOC,0
+    goto SECONDSAMPLE
+
+FIRSTSAMPLE
+    banksel CAP_AVG
+    movf CAP+2,W
+    movwf CAP_AVG
+    movf CAP+1,W
+    movwf CAP_AVG+1
+    movf CAP+0,W
+    movwf CAP_AVG+2
+
+    banksel CAP_LOC
+    incf CAP_LOC,F
+    goto AVGCALC
+
+SECONDSAMPLE
+    banksel CAP_AVG
+    movf CAP+2,W
+    movwf CAP_AVG+3
+    movf CAP+1,W
+    movwf CAP_AVG+4
+    movf CAP+0,W
+    movwf CAP_AVG+5
+
+    banksel CAP_LOC
+    incf CAP_LOC,F
+    goto AVGCALC
+THIRDSAMPLE
+    btfsc CAP_LOC,0
+    goto FOURTHSAMPLE
+
+    banksel CAP_AVG
+    movf CAP+2,W
+    movwf CAP_AVG+6
+    movf CAP+1,W
+    movwf CAP_AVG+7
+    movf CAP+0,W
+    movwf CAP_AVG+8
+
+    banksel CAP_LOC
+    incf CAP_LOC,F
+    goto AVGCALC
+
+FOURTHSAMPLE
+    banksel CAP_AVG
+    movf CAP+2,W
+    movwf CAP_AVG+9
+    movf CAP+1,W
+    movwf CAP_AVG+10
+    movf CAP+0,W
+    movwf CAP_AVG+11
+
+    banksel CAP_LOC
+    clrf CAP_LOC
+    goto AVGCALC
+
+AVGCALC
+    ;TODO
+
+
+
+
+
+    
+    clrf LCD_STACK0
+    movlw 0xC0
+    movwf LCD_STACK1
+    call LCDWRITE
+    bsf LCD_STACK0,0
+
+    
+
+    movlw 0x31
+    btfss CAP+1,7
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP+1,6
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP+1,5
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP+1,4
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+    movlw 0x31
+    btfss CAP+1,3
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+    movlw 0x31
+    btfss CAP+1,2
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+    movlw 0x31
+    btfss CAP+1,1
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+    movlw 0x31
+    btfss CAP+1,0
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP,7
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP,6
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP,5
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP,4
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+    movlw 0x31
+    btfss CAP,3
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP,2
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP,1
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP,0
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+
+
+
+
 
     return
 
@@ -306,6 +518,12 @@ CAPSTEP
 
 loop
     pagesel loop
+    banksel T1CON
+    bsf T1CON,TMR1ON
+    
+
+
+
     ;Delay Block
     ;-----------------
     banksel count1
