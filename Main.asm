@@ -39,7 +39,11 @@ RXPIN       EQU     5
     ; starting at address 0x20 in register file space
     count1 ;count1 => 0x20
     count2 ;count2 => 0x21
-    CAP_AVG:12
+    CAP_ARRAY:4
+    SLP_HRS
+    SLP_MINS
+    SLP_SECS
+    CAP_AVG
     CAP_LOC
     ENDC
 
@@ -127,6 +131,7 @@ CAPSENSE_Init
     pagesel CAPSENSE_Init
 TIMER_ISP_Init
 
+    clrf TIMEQTR
     banksel TMR1L
     clrf TMR1L
     banksel TMR1H
@@ -153,6 +158,36 @@ INIT_FINISHED
 ISPHANDLER
 
     ;ALL in the same bank(How Efficient!), don't rearrange!
+
+    btfss TIMEQTR,2
+    goto NORMAL
+
+    clrf TIMEQTR
+    banksel SLP_SECS
+    incf SLP_SECS
+
+    movlw 60
+    subwf SLP_SECS
+
+    btfss STATUS,Z
+    goto NORMAL
+
+    CLRF SLP_SECS
+    incf SLP_MINS
+
+    movlw 60
+    subwf SLP_MINS
+
+    btfss STATUS,Z
+    goto NORMAL
+
+    CLRF SLP_MINS
+    incf SLP_HRS
+    
+NORMAL
+    btfsc TEMP,7
+    incf TIMEQTR
+    
     banksel T1CON
     bcf T1CON,TMR1ON
     movlw 0x0B
@@ -161,8 +196,8 @@ ISPHANDLER
     movwf TMR1L
     banksel PIR1
     bcf PIR1, TMR1IF
-    banksel T1CON
     bsf T1CON,TMR1ON
+
 
     retfie
 
@@ -327,10 +362,22 @@ CAPCHECK
 
 CAPSTEP
     btfsc CAP+2,3
-    bsf PORTC,1
+    bsf PORTC,1 ;ERROR
     call ISP_ENABLE
 
 SAMPLEDECIDE
+
+    bcf STATUS,C
+    rrf CAP,F
+    bcf STATUS,C
+    rrf CAP,F
+    bcf STATUS,C
+    rrf CAP,F
+    bcf STATUS,C
+    rrf CAP,F
+    bcf STATUS,C
+    rrf CAP,F
+
     banksel CAP_LOC
 
     btfsc CAP_LOC,1
@@ -340,26 +387,18 @@ SAMPLEDECIDE
     goto SECONDSAMPLE
 
 FIRSTSAMPLE
-    banksel CAP_AVG
-    movf CAP+2,W
-    movwf CAP_AVG
-    movf CAP+1,W
-    movwf CAP_AVG+1
-    movf CAP+0,W
-    movwf CAP_AVG+2
+    banksel CAP_ARRAY
+    movf CAP,W
+    movwf CAP_ARRAY
 
     banksel CAP_LOC
     incf CAP_LOC,F
     goto AVGCALC
 
 SECONDSAMPLE
-    banksel CAP_AVG
-    movf CAP+2,W
-    movwf CAP_AVG+3
-    movf CAP+1,W
-    movwf CAP_AVG+4
-    movf CAP+0,W
-    movwf CAP_AVG+5
+    banksel CAP_ARRAY
+    movf CAP,W
+    movwf CAP_ARRAY+1
 
     banksel CAP_LOC
     incf CAP_LOC,F
@@ -368,143 +407,44 @@ THIRDSAMPLE
     btfsc CAP_LOC,0
     goto FOURTHSAMPLE
 
-    banksel CAP_AVG
-    movf CAP+2,W
-    movwf CAP_AVG+6
-    movf CAP+1,W
-    movwf CAP_AVG+7
-    movf CAP+0,W
-    movwf CAP_AVG+8
+    banksel CAP_ARRAY
+    movf CAP,W
+    movwf CAP_ARRAY+2
 
     banksel CAP_LOC
     incf CAP_LOC,F
     goto AVGCALC
 
 FOURTHSAMPLE
-    banksel CAP_AVG
-    movf CAP+2,W
-    movwf CAP_AVG+9
-    movf CAP+1,W
-    movwf CAP_AVG+10
-    movf CAP+0,W
-    movwf CAP_AVG+11
+    banksel CAP_ARRAY
+    movf CAP,W
+    movwf CAP_ARRAY+3
 
     banksel CAP_LOC
     clrf CAP_LOC
     goto AVGCALC
 
 AVGCALC
-    ;TODO
+    movf CAP_ARRAY,W
+    addwf CAP_ARRAY+1,W
+    addwf CAP_ARRAY+2,W
+    addwf CAP_ARRAY+3,W
+    movwf CAP_AVG
 
+    rrf CAP_AVG,F
 
-
-
-
-    
-    clrf LCD_STACK0
-    movlw 0xC0
-    movwf LCD_STACK1
-    call LCDWRITE
-    bsf LCD_STACK0,0
-
-    
-
-    movlw 0x31
-    btfss CAP+1,7
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP+1,6
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP+1,5
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP+1,4
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-    movlw 0x31
-    btfss CAP+1,3
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-    movlw 0x31
-    btfss CAP+1,2
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-    movlw 0x31
-    btfss CAP+1,1
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-    movlw 0x31
-    btfss CAP+1,0
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP,7
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP,6
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP,5
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP,4
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-    movlw 0x31
-    btfss CAP,3
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP,2
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP,1
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-    movlw 0x31
-    btfss CAP,0
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
-
-
-
-
-
-
+    btfsc CAP_AVG,3
+    goto SLEEPING
+    btfsc CAP_AVG,2
+    goto SLEEPING
+    btfsc CAP_AVG,1
+    goto SLEEPING
+    goto nSLEEPING
+SLEEPING
+    bsf TEMP,7
+    return
+nSLEEPING
+    bcf TEMP,7
     return
 
 ;-------------------------------------------------------
@@ -541,14 +481,60 @@ smallest_loop
 
     incf PORTA, f ;Increment LED count
     
-    btfss PORTB,4
+    btfsc PORTB,4
     call Per_Week
 
-    btfsc PORTB,4
+    btfss PORTB,4
     call Deficiency
 
     pagesel CAPSENSE
     call CAPSENSE
+
+     clrf LCD_STACK0
+    movlw 0xC0
+    movwf LCD_STACK1
+    call LCDWRITE
+    bsf LCD_STACK0,0
+
+    movlw 0x31
+    btfss CAP_AVG,3
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP_AVG,2
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP_AVG,1
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    movlw 0x31
+    btfss CAP_AVG,0
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    banksel SLP_SECS
+
+    movlw 0x31
+    btfss SLP_SECS,1
+    movlw 0x30
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    btfsc TEMP,7
+    bsf PORTC,1
+
+    btfss TEMP,7
+    bcf PORTC,1
+
+
 
     pagesel loop
     goto loop
