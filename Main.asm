@@ -45,6 +45,7 @@ RXPIN       EQU     5
     SLP_SECS
     CAP_AVG
     CAP_LOC
+    HDLR
     ENDC
 
     org 0x04
@@ -130,7 +131,10 @@ CAPSENSE_Init
     call ISP_ENABLE
     pagesel CAPSENSE_Init
 TIMER_ISP_Init
-
+    banksel SLP_HRS
+    clrf SLP_HRS
+    clrf SLP_MINS
+    clrf SLP_SECS
     clrf TIMEQTR
     banksel TMR1L
     clrf TMR1L
@@ -161,38 +165,41 @@ ISPHANDLER
 
     btfss TIMEQTR,2
     goto NORMAL
+   
 
     clrf TIMEQTR
     banksel SLP_SECS
     incf SLP_SECS
 
     movlw 60
-    subwf SLP_SECS
+    subwf SLP_SECS,W
 
     btfss STATUS,Z
-    goto NORMAL
+    goto NORMAL2
 
     CLRF SLP_SECS
     incf SLP_MINS
 
     movlw 60
-    subwf SLP_MINS
+    subwf SLP_MINS,W
 
     btfss STATUS,Z
-    goto NORMAL
+    goto NORMAL2
 
     CLRF SLP_MINS
     incf SLP_HRS
+
+    goto NORMAL2
     
 NORMAL
     btfsc TEMP,7
     incf TIMEQTR
-    
+NORMAL2
     banksel T1CON
     bcf T1CON,TMR1ON
-    movlw 0x0B
+    movlw 0x3C
     movwf TMR1H
-    movlw 0xDC
+    movlw 0xFF
     movwf TMR1L
     banksel PIR1
     bcf PIR1, TMR1IF
@@ -447,6 +454,114 @@ nSLEEPING
     bcf TEMP,7
     return
 
+;DISPLAYSTUFF
+CHARDISP
+
+    btfsc TEMPCHAR,3
+    goto  CHARSPECIAL
+
+CHARNORM
+    movlw 0x30
+    addwf TEMPCHAR,W
+    movwf LCD_STACK1
+    call LCDWRITE
+
+    goto EXITCHAR
+
+
+CHARSPECIAL
+
+    movlw 0x08
+    subwf TEMPCHAR,W
+    btfsc STATUS,Z
+    goto CHAREIGHT
+
+    movlw 0x09
+    subwf TEMPCHAR,W
+    btfsc STATUS,Z
+    goto CHARNINE
+
+    movlw 0x0A
+    subwf TEMPCHAR,W
+    btfsc STATUS,Z
+    goto CHARA
+
+    movlw 0x0B
+    subwf TEMPCHAR,W
+    btfsc STATUS,Z
+    goto CHARB
+
+    movlw 0x0C
+    subwf TEMPCHAR,W
+    btfsc STATUS,Z
+    goto CHARC
+
+    movlw 0x0D
+    subwf TEMPCHAR,W
+    btfsc STATUS,Z
+    goto CHARD
+
+    movlw 0x0E
+    subwf TEMPCHAR,W
+    btfsc STATUS,Z
+    goto CHARE
+
+    movlw 0x0F
+    subwf TEMPCHAR,W
+    btfsc STATUS,Z
+    goto CHARF
+    goto EXITCHAR
+
+CHAREIGHT
+    movlw '8'
+    movwf LCD_STACK1
+    call LCDWRITE
+    goto EXITCHAR
+CHARNINE
+    movlw '9'
+    movwf LCD_STACK1
+    call LCDWRITE
+    goto EXITCHAR
+CHARA
+    movlw 'A'
+    movwf LCD_STACK1
+    call LCDWRITE
+    goto EXITCHAR
+CHARB
+    movlw 'B'
+    movwf LCD_STACK1
+    call LCDWRITE
+    goto EXITCHAR
+CHARC
+    movlw 'C'
+    movwf LCD_STACK1
+    call LCDWRITE
+    goto EXITCHAR
+CHARD
+    movlw 'D'
+    movwf LCD_STACK1
+    call LCDWRITE
+    goto EXITCHAR
+CHARE
+    movlw 'E'
+    movwf LCD_STACK1
+    call LCDWRITE
+    goto EXITCHAR
+CHARF
+    movlw 'F'
+    movwf LCD_STACK1
+    call LCDWRITE
+    goto EXITCHAR
+EXITCHAR
+    return
+
+
+
+
+
+
+
+
 ;-------------------------------------------------------
 ;End Function Section
     
@@ -490,51 +605,118 @@ smallest_loop
     pagesel CAPSENSE
     call CAPSENSE
 
-     clrf LCD_STACK0
+    clrf LCD_STACK0
     movlw 0xC0
     movwf LCD_STACK1
     call LCDWRITE
     bsf LCD_STACK0,0
 
-    movlw 0x31
-    btfss CAP_AVG,3
-    movlw 0x30
+HOURS
+    banksel SLP_HRS
+    movlw 0xF0
+    andwf SLP_HRS,W
+    movwf HDLR
+
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,W
+
+
+    movwf TEMPCHAR
+    pagesel CHARDISP
+    call CHARDISP
+    pagesel HOURS
+
+    banksel SLP_HRS
+    movlw 0x0F
+    andwf SLP_HRS,W
+    movwf TEMPCHAR
+    pagesel CHARDISP
+    call CHARDISP
+    pagesel HOURS
+
+    movlw ':'
     movwf LCD_STACK1
     call LCDWRITE
 
-    movlw 0x31
-    btfss CAP_AVG,2
-    movlw 0x30
+
+
+MINUTES
+    banksel SLP_MINS
+    movlw 0xF0
+    andwf SLP_MINS,W
+    movwf HDLR
+
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,W
+
+
+    movwf TEMPCHAR
+    pagesel CHARDISP
+    call CHARDISP
+    pagesel MINUTES
+
+    banksel SLP_MINS
+    movlw 0x0F
+    andwf SLP_MINS,W
+    movwf TEMPCHAR
+    pagesel CHARDISP
+    call CHARDISP
+    pagesel MINUTES
+
+
+    movlw ':'
     movwf LCD_STACK1
     call LCDWRITE
 
-    movlw 0x31
-    btfss CAP_AVG,1
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
 
-    movlw 0x31
-    btfss CAP_AVG,0
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
+SECONDS
+    banksel SLP_SECS
+    movlw 0xF0
+    andwf SLP_SECS,W
+    movwf HDLR
+
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,F
+    bcf STATUS,C
+    rrf HDLR,W
+
+
+    movwf TEMPCHAR
+    pagesel CHARDISP
+    call CHARDISP
+    pagesel SECONDS
 
     banksel SLP_SECS
+    movlw 0x0F
+    andwf SLP_SECS,W
+    movwf TEMPCHAR
+    pagesel CHARDISP
+    call CHARDISP
+    pagesel SECONDS
 
-    movlw 0x31
-    btfss SLP_SECS,1
-    movlw 0x30
-    movwf LCD_STACK1
-    call LCDWRITE
+
 
     btfsc TEMP,7
     bsf PORTC,1
 
     btfss TEMP,7
     bcf PORTC,1
-
-
 
     pagesel loop
     goto loop

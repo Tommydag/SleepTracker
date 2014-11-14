@@ -25,6 +25,7 @@ LCD_STACK4    RES        1
 CAP           RES        3
 TEMP          RES        1
 TIMEQTR       RES        1
+TEMPCHAR      RES        1
 
 LCD4BITS    CODE
 
