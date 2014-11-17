@@ -1,23 +1,16 @@
-
 ;Author: Thomas D'Agostino
-
-;Todo:
-;By Importance:
-;1 Push Button Working
-;2 LCD Working
-;3 Get loops to work
-;4 Get constants to work
-;Get ADC working
-;10 Get capacitive sensor working
-;11 Get wdt working
-;12 Other possible functions(Power stuff)
-;13 ????
-;14 Profit
+;Student: Rose-Hulman Institute of Technology
+;Electrical Engineering 2017
+;Class: ECE250
+;Purpose: A sleep tracker that utilizes a capacitive touch sensor to
+;keep track of the amount of time slept.
+;Credit to Dr. Christopher Miller for the LCD display include file and the
+;arduino community for inspiration and guidance on designing the capacitive
+;touch sensor. 
 
     list p=16F887
 #include "p16F887.inc"
 #include "lcd4bits.inc"
-
 
 ; CONFIG1
 ; __config 0x20F2
@@ -26,37 +19,42 @@
 ; __config 0x3EFF
  __CONFIG _CONFIG2, _BOR4V_BOR21V & _WRT_OFF
 
-
     radix dec ; Make default numbers decimal values
     org 0 ; Reset vector is at prog loc 0x00.
     goto start ; Skip over INT vector at prog loc 0x04.
 
-SENDPIN     EQU     2
-RXPIN       EQU     5
+    SENDPIN     EQU     2 ;Definition for the output part of the capacitive touch sensor.
+    RXPIN       EQU     5 ;Definition for the input part of the capacitive touch sensor
 
 
     CBLOCK 0x20 ;Use CBLOCK and ENDC to reserve a block of registers
     ; starting at address 0x20 in register file space
     count1 ;count1 => 0x20
     count2 ;count2 => 0x21
-    CAP_ARRAY:4
-    SLP_HRS
-    SLP_MINS
-    SLP_SECS
-    CAP_AVG
-    CAP_LOC
-    HDLR
+    CAP_ARRAY:4 ;Array of 4 capsense readings 0x22:0x25
+    SLP_HRS ;The number of hours slept
+    SLP_MINS ;The number of minutes slept
+    SLP_SECS ;The number of seconds slept
+    CAP_AVG ;Used when computing the average of the array
+    CAP_LOC ;Current location in array
+    HDLR ;A temporary holding variable
     ENDC
 
-    org 0x04
-    goto ISPHANDLER
+    ;Added to the ushared data in LCD.inc
+    ;CAP           RES        3
+    ;TEMP          RES        1
+    ;TIMEQTR       RES        1
+    ;TEMPCHAR      RES        1
 
-
+    ;ISP BELOW
+    ;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    org 0x04 ;When Interrupt triggers
+    goto ISPHANDLER ;goes to the interrupt handler
+    ;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     org 0x05 ;Start assembling program at location 5 in program space.
 start
     
-
 ;Hardware initialization
 ;=========================================================
     
@@ -78,15 +76,16 @@ IO_INIT
     MOVLW 0xFF
     MOVWF TRISB
     banksel ANSEL
-    clrf ANSEL
+    clrf ANSEL ;Digital Mode
     banksel ANSELH
-    clrf ANSELH
+    clrf ANSELH ;Digital mode
     banksel OPTION_REG
-    bcf OPTION_REG,7;set bit 7 to 0
+    bcf OPTION_REG,7;set bit 7 to 0 to turn on internal pull-ups
     banksel WPUB
     MOVLW 0x10
     MOVWF WPUB
 
+;Initializes the LCD and displays the main message on the screen
 LCD_Init
     pagesel LCDINIT
     call LCDINIT
@@ -115,21 +114,20 @@ LCD_Init
     movwf LCD_STACK1
     call LCDWRITE
 
+;Initializes the IO for the capacitive sensing
 CAPSENSE_Init
-
-;C2 send pin, c5 recieve pin
+    ;C2 send pin, c5 recieve pin
     call ISP_DISABLE;Disable Interrups Temporarily
     pagesel CAPSENSE_Init
-    banksel TRISC
 
+    banksel TRISC
     bcf TRISC,SENDPIN ;Set as output
 
     banksel CAP_LOC
     clrf CAP_LOC
 
-
-    call ISP_ENABLE
-    pagesel CAPSENSE_Init
+    call ISP_ENABLE ;Re-enable interrupts
+    pagesel TIMER_ISP_Init
 TIMER_ISP_Init
     banksel SLP_HRS
     clrf SLP_HRS
@@ -159,8 +157,12 @@ INIT_FINISHED
     pagesel loop
     goto loop
 
+;Quickly handle ISP and get back normal operation
 ISPHANDLER
-
+    banksel PIR1
+    btfss PIR1,TMR1IF
+    goto LEAVEISP
+    
     ;ALL in the same bank(How Efficient!), don't rearrange!
 
     btfss TIMEQTR,2
@@ -191,23 +193,21 @@ ISPHANDLER
 
     goto NORMAL2
     
-NORMAL
+NORMAL ;Check to increment sleep time
     btfsc TEMP,7
     incf TIMEQTR
 NORMAL2
     banksel T1CON
-    bcf T1CON,TMR1ON
+    bcf T1CON,TMR1ON ;Pause timer while reseting stuff
     movlw 0x3C
     movwf TMR1H
     movlw 0xFF
     movwf TMR1L
     banksel PIR1
     bcf PIR1, TMR1IF
-    bsf T1CON,TMR1ON
-
-
+    bsf T1CON,TMR1ON ;restart timer
+LEAVEISP ;'nuff said
     retfie
-
 
 ;=======================================================================
 ; End Startup
@@ -215,8 +215,6 @@ NORMAL2
 
 ;Functions Section
 ;-----------------------------------------------------------------------
-    
-
 Per_Week
     pagesel LCDWRITE
     movlw 0x00
@@ -226,7 +224,6 @@ Per_Week
     call LCDWRITE
     movlw 0x01
     movwf LCD_STACK0
-
 
     movlw ' '
     movwf LCD_STACK1
@@ -261,9 +258,7 @@ Per_Week
     pagesel loop
     return
 
-
-
-Deficiency
+Deficiency ;Not currently implemented, shows up on screen but nothing is different
     pagesel LCDWRITE
     movlw 0x00
     movwf LCD_STACK0
@@ -307,7 +302,7 @@ Deficiency
     pagesel loop
     return
 
-ISP_DISABLE
+ISP_DISABLE;Temporarily disable ISP
     pagesel ISP_DISABLE
     banksel INTCON
     bcf TEMP,0  ;Clear Temp0
@@ -316,13 +311,17 @@ ISP_DISABLE
     bcf INTCON,GIE
     return
 
-ISP_ENABLE
+ISP_ENABLE;reenable ISP
     pagesel ISP_ENABLE
     banksel INTCON
     btfsc TEMP,0 ;Check if interrupts are enabled
     bsf INTCON,GIE  ;If enabled previously, turn them back on
     return
 
+;A heavily modified version of the arduino capsense library to work with pic and
+;assembly.
+;Based on arduino capsense library, which can be found using the link below:
+;http://playground.arduino.cc/Main/CapacitiveSensor?from=Main.CapSense
 CAPSENSE
     call ISP_DISABLE
     pagesel CAPSENSE
@@ -348,8 +347,7 @@ CAPSENSE
     banksel PORTC
     bsf PORTC,SENDPIN ;SEND it HIGH!
 
-    
-CAPLOOP
+CAPLOOP ;Loop until the input pin goes high
     incfsz CAP,F
     goto CAPCHECK
 
@@ -360,7 +358,6 @@ CAPLOOP
     btfsc CAP+2,3
     goto CAPSTEP
 
-
 CAPCHECK
     btfsc PORTC,RXPIN
     goto CAPSTEP
@@ -369,11 +366,10 @@ CAPCHECK
 
 CAPSTEP
     btfsc CAP+2,3
-    bsf PORTC,1 ;ERROR
+    bsf PORTC,1 ;ERROR:TIMEOUT, needs to be handled better in the future
     call ISP_ENABLE
 
 SAMPLEDECIDE
-
     bcf STATUS,C
     rrf CAP,F
     bcf STATUS,C
@@ -431,14 +427,15 @@ FOURTHSAMPLE
     clrf CAP_LOC
     goto AVGCALC
 
-AVGCALC
+AVGCALC ;Calculate a running average of the past four capsense samples
     movf CAP_ARRAY,W
     addwf CAP_ARRAY+1,W
     addwf CAP_ARRAY+2,W
     addwf CAP_ARRAY+3,W
     movwf CAP_AVG
 
-    rrf CAP_AVG,F
+    rrf CAP_AVG,F ;divide by 2(I found it better to divide by 2 instead of 4,
+    ; so I guess it isn't technically an average)
 
     btfsc CAP_AVG,3
     goto SLEEPING
@@ -447,16 +444,15 @@ AVGCALC
     btfsc CAP_AVG,1
     goto SLEEPING
     goto nSLEEPING
-SLEEPING
+SLEEPING ;Indicate sleeping
     bsf TEMP,7
     return
-nSLEEPING
+nSLEEPING ;Indicate not sleeping
     bcf TEMP,7
     return
 
-;DISPLAYSTUFF
+;DISPLAYSTUFF: Controls the hex display for the lcd
 CHARDISP
-
     btfsc TEMPCHAR,3
     goto  CHARSPECIAL
 
@@ -468,9 +464,7 @@ CHARNORM
 
     goto EXITCHAR
 
-
 CHARSPECIAL
-
     movlw 0x08
     subwf TEMPCHAR,W
     btfsc STATUS,Z
@@ -555,13 +549,6 @@ CHARF
 EXITCHAR
     return
 
-
-
-
-
-
-
-
 ;-------------------------------------------------------
 ;End Function Section
     
@@ -574,10 +561,7 @@ EXITCHAR
 loop
     pagesel loop
     banksel T1CON
-    bsf T1CON,TMR1ON
-    
-
-
+    bsf T1CON,TMR1ON ;Start timer
 
     ;Delay Block
     ;-----------------
@@ -593,25 +577,26 @@ smallest_loop
     ;----------------
 
     banksel PORTA
+    incf PORTA, f ;Increment LED count,
+    ;just a flashing LED display for effect!
 
-    incf PORTA, f ;Increment LED count
-    
+    ;Select what mode to display(deficiency not implemented)
     btfsc PORTB,4
     call Per_Week
-
     btfss PORTB,4
     call Deficiency
 
     pagesel CAPSENSE
-    call CAPSENSE
+    call CAPSENSE ;Test if someone is sleeping
 
+    ;Display how much time has been slept
     clrf LCD_STACK0
     movlw 0xC0
     movwf LCD_STACK1
     call LCDWRITE
     bsf LCD_STACK0,0
 
-HOURS
+HOURS;Display
     banksel SLP_HRS
     movlw 0xF0
     andwf SLP_HRS,W
@@ -644,9 +629,7 @@ HOURS
     movwf LCD_STACK1
     call LCDWRITE
 
-
-
-MINUTES
+MINUTES;Display
     banksel SLP_MINS
     movlw 0xF0
     andwf SLP_MINS,W
@@ -674,14 +657,12 @@ MINUTES
     pagesel CHARDISP
     call CHARDISP
     pagesel MINUTES
-
 
     movlw ':'
     movwf LCD_STACK1
     call LCDWRITE
 
-
-SECONDS
+SECONDS;Display
     banksel SLP_SECS
     movlw 0xF0
     andwf SLP_SECS,W
@@ -696,7 +677,6 @@ SECONDS
     bcf STATUS,C
     rrf HDLR,W
 
-
     movwf TEMPCHAR
     pagesel CHARDISP
     call CHARDISP
@@ -709,8 +689,6 @@ SECONDS
     pagesel CHARDISP
     call CHARDISP
     pagesel SECONDS
-
-
 
     btfsc TEMP,7
     bsf PORTC,1
@@ -719,7 +697,7 @@ SECONDS
     bcf PORTC,1
 
     pagesel loop
-    goto loop
+    goto loop;Restart loop
     end
 
 ;+++++++++++++++++++++++++++++++++++++++++++++++++++
